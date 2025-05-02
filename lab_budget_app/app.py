@@ -85,7 +85,7 @@ def get_gspread_client():
 
 try:
     gc = get_gspread_client()
-    SHEET_URL = "https://docs.google.com/spreadsheets/d/你的新Google表格ID/edit?usp=sharing"  # 替換為你的表格URL
+    SHEET_URL = "https://docs.google.com/spreadsheets/d/1F2SDyauxsE229BuM8mv7kkfIuWz6LPGnFQNCjzKyKp8/edit?usp=sharing"  
     
     # 確保所有需要的工作表存在
     spreadsheet = gc.open_by_url(SHEET_URL)
