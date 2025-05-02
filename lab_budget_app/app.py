@@ -14,7 +14,7 @@ if not st.session_state["authenticated"]:
     password = st.text_input("請輸入密碼：", type="password")
     if password == PASSWORD:
         st.session_state["authenticated"] = True
-        st.experimental_rerun()
+        st.rerun()
     else:
         st.stop()
 
