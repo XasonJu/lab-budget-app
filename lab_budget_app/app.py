@@ -63,7 +63,10 @@ st.dataframe(summary_df, use_container_width=True)
 st.header("📤 匯出資料")
 export_type = st.radio("選擇匯出類型", ["統計報表", "每筆紀錄"])
 if export_type == "統計報表":
+    if "剩餘天數" in summary_df.columns:
     export_df = summary_df.drop(columns=["剩餘天數"])
+else:
+    export_df = summary_df.copy()
     st.download_button(
         label="⬇️ 下載統計報表 CSV",
         data=export_df.to_csv(index=False).encode('utf-8-sig'),
