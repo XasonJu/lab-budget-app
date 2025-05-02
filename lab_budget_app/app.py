@@ -1,9 +1,10 @@
 import streamlit as st
-import json
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
+import os
+import json
 
 # ====== 頁面設定 ======
 st.set_page_config(
@@ -78,14 +79,40 @@ if not st.session_state["authenticated"]:
 # ====== Google Sheets 認證 ======
 @st.cache_resource
 def get_gspread_client():
-    keyfile_dict = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    credentials = ServiceAccountCredentials.from_json_keyfile_dict(keyfile_dict, scope)
+    # 使用部署環境變數或本地文件
+    if os.path.exists("gspread_key.json"):
+        # 本地開發環境 - 使用本地的服務帳號密鑰文件
+        credentials = ServiceAccountCredentials.from_json_keyfile_name(
+            "gspread_key.json", 
+            ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        )
+    else:
+        # Streamlit Cloud 環境 - 嘗試從環境變數中獲取
+        try:
+            if "GOOGLE_SERVICE_ACCOUNT" in st.secrets:
+                keyfile_dict = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
+                credentials = ServiceAccountCredentials.from_json_keyfile_dict(
+                    keyfile_dict, 
+                    ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+                )
+            else:
+                st.error("無法找到 Google 服務帳號憑證。請確保已上傳 gspread_key.json 文件或設定環境變數。")
+                return None
+        except Exception as e:
+            st.error(f"讀取憑證時發生錯誤: {e}")
+            return None
+    
     return gspread.authorize(credentials)
 
+# 嘗試連接 Google Sheets
 try:
     gc = get_gspread_client()
-    SHEET_URL = "https://docs.google.com/spreadsheets/d/1F2SDyauxsE229BuM8mv7kkfIuWz6LPGnFQNCjzKyKp8/edit?usp=sharing"  
+    if gc is None:
+        st.error("未能創建 Google Sheets 客戶端。請檢查認證設定。")
+        st.stop()
+    
+    # 替換為你的 Google Sheets 網址
+    SHEET_URL = "https://docs.google.com/spreadsheets/d/1F2SDyauxsE229BuM8mv7kkfIuWz6LPGnFQNCjzKyKp8/edit?usp=sharing"
     
     # 確保所有需要的工作表存在
     spreadsheet = gc.open_by_url(SHEET_URL)
@@ -129,6 +156,10 @@ try:
 except Exception as e:
     st.markdown("<div class='danger-box'>❌ 無法連接到 Google Sheets。請確認服務帳號設定正確。</div>", unsafe_allow_html=True)
     st.error(f"錯誤詳情: {e}")
+    # 顯示更詳細的錯誤訊息以幫助診斷
+    st.write("錯誤類型:", type(e).__name__)
+    import traceback
+    st.code(traceback.format_exc())
     st.stop()
 
 # ====== 資料處理函數 ======
@@ -227,7 +258,26 @@ if menu == "📊 儀表板":
         st.metric("剩餘預算", f"NT$ {remaining:,.0f}", delta=f"{remaining/total_budget*100:.1f}%" if total_budget > 0 else "0%")
     
     # 這裡可以添加更多儀表板元素，例如圖表和數據摘要
-    # ...
+    if not records_df.empty and not budgets_df.empty:
+        st.subheader("預算使用概況")
+        
+        # 計算每個計畫的使用情況
+        if not records_df.empty:
+            project_spending = records_df.groupby("計畫名稱")["花費金額"].sum().reset_index()
+            project_budget = budgets_df.set_index("計畫名稱")["總預算"].to_dict()
+            
+            project_spending["總預算"] = project_spending["計畫名稱"].map(lambda x: project_budget.get(x, 0))
+            project_spending["剩餘預算"] = project_spending["總預算"] - project_spending["花費金額"]
+            project_spending["使用比例"] = (project_spending["花費金額"] / project_spending["總預算"] * 100).round(1)
+            
+            # 使用 st.bar_chart 繪製圖表
+            chart_data = project_spending.set_index("計畫名稱")[["花費金額", "剩餘預算"]]
+            st.bar_chart(chart_data)
+            
+            # 顯示圖表數據
+            st.dataframe(project_spending, use_container_width=True)
+    else:
+        st.info("尚未有足夠資料顯示儀表板圖表。請先新增計畫預算和經費記錄。")
 
 elif menu == "💰 經費記錄":
     st.markdown("<h2 class='sub-header'>💰 經費記錄</h2>", unsafe_allow_html=True)
@@ -475,6 +525,15 @@ elif menu == "⚙️ 設定":
     # 顯示 Google Sheets 連結
     st.markdown("<h3>Google Sheets 連結</h3>", unsafe_allow_html=True)
     st.markdown(f"[點擊開啟 Google Sheets 資料表]({SHEET_URL})")
+    
+    # 顯示認證狀態
+    st.markdown("<h3>認證狀態</h3>", unsafe_allow_html=True)
+    if os.path.exists("gspread_key.json"):
+        st.success("已成功使用本地服務帳號密鑰文件進行認證")
+    elif "GOOGLE_SERVICE_ACCOUNT" in st.secrets:
+        st.success("已成功使用 Streamlit Secrets 進行認證")
+    else:
+        st.warning("無法找到認證資訊，請確認配置")
     
     # 系統資訊
     st.markdown("<h3>系統資訊</h3>", unsafe_allow_html=True)
