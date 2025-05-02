@@ -59,25 +59,19 @@ for project, info in st.session_state.budgets.items():
 summary_df = pd.DataFrame(summary_rows)
 st.dataframe(summary_df, use_container_width=True)
 
-# === 匯出選擇 ===
-st.header("📤 匯出資料")
+# 匯出選擇
+st.header("📎 匯出資料")
 export_type = st.radio("選擇匯出類型", ["統計報表", "每筆紀錄"])
 if export_type == "統計報表":
     if "剩餘天數" in summary_df.columns:
-    export_df = summary_df.drop(columns=["剩餘天數"])
-else:
-    export_df = summary_df.copy()
+        export_df = summary_df.drop(columns=["剩餘天數"])
+    else:
+        export_df = summary_df.copy()
+
     st.download_button(
-        label="⬇️ 下載統計報表 CSV",
+        label="📥 下載統計報表 CSV",
         data=export_df.to_csv(index=False).encode('utf-8-sig'),
         file_name='lab_budget_summary.csv',
-        mime='text/csv'
-    )
-else:
-    st.download_button(
-        label="⬇️ 下載紀錄明細 CSV",
-        data=st.session_state.records.to_csv(index=False).encode('utf-8-sig'),
-        file_name='lab_budget_records.csv',
         mime='text/csv'
     )
 
